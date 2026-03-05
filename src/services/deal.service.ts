@@ -84,9 +84,12 @@ export async function getAllUnread(userId: string) {
   return result.rows;
 }
 
-export async function getMessages(chatRoomId: string, cursor?: string) {
+export async function getMessages(chatRoomId: string, userId: UUID, cursor?: string) {
+    const isHasPermission = await checkPermission(chatRoomId, userId);
+    if(!isHasPermission){
+        throw new AppError("คุณไม่มีสิทธิ์เข้าถึงห้องแชทนี้", 403);
+    }
 
-    console.log(`Fetching messages for chatRoomId: ${chatRoomId} with cursor: ${cursor}`);
     const PAGE_SIZE = 20;
 
     const params: any[] = [chatRoomId];
@@ -111,6 +114,17 @@ export async function getMessages(chatRoomId: string, cursor?: string) {
         nextCursor: messages.length > 0 ? messages[0].created_at : null,
         hasMore: messages.length === PAGE_SIZE
     };
+}
+
+export async function checkPermission(chatRoomId: string, userId: UUID): Promise<boolean> {
+    const result = await pool.query(
+        `SELECT user_id
+         FROM ct.chat_room_members
+         WHERE chat_room_id = $1 AND user_id = $2`,
+        [chatRoomId, userId]
+    );
+
+    return result.rows.length > 0;
 }
 
 export async function CreateDeal(request: CreateDealRequest) {

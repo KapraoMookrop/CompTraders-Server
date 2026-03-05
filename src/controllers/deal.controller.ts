@@ -3,7 +3,7 @@ import * as dealService from "../services/deal.service.js";
 
 export async function GetMessages(req: Request, res: Response, next: NextFunction) {
   try {
-    const users = await dealService.getMessages(req.body.chatRoomId, req.body.cursor);
+    const users = await dealService.getMessages(req.body.chatRoomId, (req as any).user.userId, req.body.cursor);
     res.json(users);
   } catch (error) {
     next(error);
