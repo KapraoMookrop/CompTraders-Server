@@ -1,11 +1,15 @@
+import http from "node:http";
 import app from "./app.js";
 import { ENV } from "./config/env.js";
 import pool from "./config/database.js";
+import { initSocket } from "./socket.js";
 
 async function start() {
   await pool.connect();
+  const server = http.createServer(app);
+  initSocket(server);
 
-  app.listen(ENV.PORT, () => {
+  server.listen(ENV.PORT, () => {
     console.log(`Server running on port ${ENV.PORT}`);
   });
 
@@ -15,7 +19,6 @@ async function start() {
       message: err.message || "Internal Server Error"
     });
   });
-  
 }
 
-start();
+await start();
