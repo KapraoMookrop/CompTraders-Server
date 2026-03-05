@@ -102,7 +102,7 @@ export async function getMessages(chatRoomId: string, cursor?: string) {
                                     ORDER BY created_at DESC
                                     LIMIT ${PAGE_SIZE}`, params);
 
-    const messages = result.rows.reverse();
+    const messages = result.rows.toReversed();
 
     return {
         messages,
