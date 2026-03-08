@@ -1,11 +1,11 @@
-import { UserRole, KycStatus, UserStatus, SellerVerificationStatus } from "./Enum.js";
-
 export interface SignUpDataRequest {
     FullName: string;
+    Phone: string;
     Email: string;
     Password: string;
-    Phone: string;
-    Role: UserRole;
-    KycStatus: KycStatus;
-    UserStatus: UserStatus;
+    AddressInfo: string;
+    ProvinceId: string;
+    DistrictId: string;
+    SubDistrictId: string;
+    ZipCode: string;
 }

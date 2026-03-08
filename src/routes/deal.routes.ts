@@ -4,11 +4,11 @@ import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
-router.post("/getMessages", authenticateToken, dealController.GetMessages);
-router.post("/createChatRoom", authenticateToken, dealController.CreateChatRoom);
-router.post("/sendMessages", authenticateToken, dealController.SendMessages);
-router.post("/markAsRead", authenticateToken, dealController.MarkAsRead);
-router.post("/getAllUnread", authenticateToken, dealController.GetAllUnread);
-router.post("/createDeal", authenticateToken, dealController.CreateDeal);
+router.post("/GetMessages", authenticateToken, dealController.GetMessages);
+router.post("/CreateChatRoom", authenticateToken, dealController.CreateChatRoom);
+router.post("/SendMessages", authenticateToken, dealController.SendMessages);
+router.post("/MarkAsRead", authenticateToken, dealController.MarkAsRead);
+router.post("/GetAllUnread", authenticateToken, dealController.GetAllUnread);
+router.post("/CreateDeal", authenticateToken, dealController.CreateDeal);
 
 export default router;
