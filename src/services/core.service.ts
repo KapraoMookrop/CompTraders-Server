@@ -85,7 +85,7 @@ export async function SendVerifyEmail(email: string, token: string) {
         }
     });
 
-    const verification_link = `http://localhost:4200/verify-email/${token}`;
+    const verification_link = `https://safe-trade-server.vercel.app/verify-email/${token}`;
 
     await transporter.sendMail({
         from: `"Support Safe Trade" <${CoreMailUser}>`,
