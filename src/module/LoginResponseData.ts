@@ -1,4 +1,4 @@
-import { UserRole, KycStatus, UserStatus, SellerVerificationStatus } from "./Enum.js";
+import { UserRole, KycStatus, UserStatus } from "./Enum.js";
 
 export interface LoginResponseData {
     FullName: string;
@@ -8,4 +8,5 @@ export interface LoginResponseData {
     KycStatus: KycStatus;
     UserStatus: UserStatus;
     JWT: string;
+    IsEnabled2FA: boolean;
 }

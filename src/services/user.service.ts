@@ -8,6 +8,7 @@ import { ENV } from "../config/env.js";
 import { type LoginResponseData } from "../module/LoginResponseData.js";
 import { AppError } from "../errors/AppError.js";
 import * as Core from "./core.service.js";
+import speakeasy from "speakeasy";
 
 export async function SignUp(request: SignUpDataRequest): Promise<UUID> {
   const { FullName, Email, Password, Phone, AddressInfo, ProvinceId, DistrictId, SubDistrictId, ZipCode } = request;
@@ -46,7 +47,7 @@ export async function SignUp(request: SignUpDataRequest): Promise<UUID> {
 
 export async function Login(email: string, password: string): Promise<LoginResponseData> {
   const result = await pool.query(
-    "SELECT id, email, full_name, password_hash, phone, role, kyc_status, status FROM ct.users WHERE email = $1",
+    "SELECT id, email, full_name, password_hash, phone, role, kyc_status, status, twofa_enabled, twofa_secret FROM ct.users WHERE email = $1",
     [email]
   );
 
@@ -55,6 +56,7 @@ export async function Login(email: string, password: string): Promise<LoginRespo
   }
 
   const user = result.rows[0];
+
 
   if (user.status === UserStatus.PENDING_VERIFICATION) {
     throw new AppError("บัญชีของคุณกำลังรอการยืนยันตัวตน กรุณาเช็คอีเมลที่ได้ลงทะเบียนไว้กับระบบ", 403);
@@ -65,8 +67,23 @@ export async function Login(email: string, password: string): Promise<LoginRespo
     throw new AppError("รหัสผ่านไม่ถูกต้อง", 401);
   }
 
+  if (user.twofa_enabled) {
+    return {
+      IsEnabled2FA: true,
+    } as LoginResponseData;
+  }
+
   const token = jwt.sign(
-    { userId: user.id, fullName: user.full_name, },
+    {
+      userId: user.id,
+      fullName: user.full_name,
+      email: user.email,
+      role: user.role,
+      phone: user.phone,
+      kycStatus: user.kyc_status,
+      userStatus: user.status,
+      isEnabled2FA: user.twofa_enabled,
+    },
     ENV.JWT_SECRET,
     { expiresIn: "1d" }
   );
@@ -79,6 +96,7 @@ export async function Login(email: string, password: string): Promise<LoginRespo
     KycStatus: user.kyc_status,
     UserStatus: user.status,
     JWT: token,
+    IsEnabled2FA: user.twofa_enabled,
   };
 
   return loginResponseData;

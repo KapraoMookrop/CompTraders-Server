@@ -1,10 +1,15 @@
 import pool from "../config/database.js";
 import { AppError } from "../errors/AppError.js";
 import type { DistrictData } from "../module/DistrictData.js";
-import { UserStatus } from "../module/Enum.js";
+import { UserStatus, Verify2FAType } from "../module/Enum.js";
+import type { LoginResponseData } from "../module/LoginResponseData.js";
+import jwt from "jsonwebtoken";
 import type { ProvinceData } from "../module/ProvinceData.js";
 import type { SubDistrictData } from "../module/SubDistrictData.js";
 import nodemailer from "nodemailer";
+import QRCode from "qrcode";
+import speakeasy from "speakeasy";
+import { ENV } from "../config/env.js";
 
 export async function GetProvinces(): Promise<ProvinceData[]> {
     const result = await pool.query(`SELECT * FROM ct.provinces`);
@@ -269,4 +274,90 @@ export async function VerifyEmail(token: string) {
     }
 
     await pool.query(`UPDATE ct.users SET status = '${UserStatus.ACTIVE}', verify_token = null, verify_token_expire = null WHERE id = $1`, [user.id]);
+}
+
+export async function Enable2FA(userId: string, email: string) {
+
+    console.log("Enabling 2FA for user:", userId, email);
+    const secret = speakeasy.generateSecret({
+        length: 20,
+        name: "SafeTrade:" + email
+    });
+
+    console.log("Secret for 2FA:", secret.base32);
+
+    const qr = await QRCode.toDataURL(secret.otpauth_url as string);
+
+    await pool.query(
+        `UPDATE ct.users SET twofa_secret = $1 WHERE id = $2`,
+        [secret.base32, userId]
+    );
+
+    return {
+        qr,
+        secret: secret.base32
+    };
+}
+
+export async function Verify2FA(email: string, token: string, type: Verify2FAType) {
+    console.log("Verifying 2FA for user:", email, "with token:", token, "and type:", type);
+    const sqlSelect = await pool.query(
+        `SELECT id, email, full_name, password_hash, phone, role, kyc_status, status, twofa_enabled, twofa_secret FROM ct.users WHERE email = $1`,
+        [email]
+    );
+
+    if (sqlSelect.rows.length === 0) {
+        throw new AppError("ไม่พบผู้ใช้งาน", 404);
+    }
+
+    const user = sqlSelect.rows[0];
+
+    const verified = speakeasy.totp.verify({
+        secret: user.twofa_secret,
+        encoding: "base32",
+        token: token,
+        window: 1
+    });
+
+    if (!verified) {
+        throw new AppError("รหัส 2FA ไม่ถูกต้อง", 401);
+    }
+
+    if (type === Verify2FAType.VERIFYENABLE) {
+        await pool.query(
+            `UPDATE ct.users SET twofa_enabled = true WHERE id = $1`,
+            [user.id]
+        );
+
+        return { status: "success", message: "2FA verified successfully" };
+    } else if (type === Verify2FAType.VERIFYLOGIN) {
+        const token = jwt.sign(
+            {
+                userId: user.id,
+                fullName: user.full_name,
+                email: user.email,
+                role: user.role,
+                phone: user.phone,
+                kycStatus: user.kyc_status,
+                userStatus: user.status,
+                isEnabled2FA: user.twofa_enabled,
+            },
+            ENV.JWT_SECRET,
+            { expiresIn: "1d" }
+        );
+
+        const loginResponseData: LoginResponseData = {
+            FullName: user.full_name,
+            Email: user.email,
+            Phone: user.phone,
+            Role: user.role,
+            KycStatus: user.kyc_status,
+            UserStatus: user.status,
+            JWT: token,
+            IsEnabled2FA: user.twofa_enabled,
+        };
+        return loginResponseData;
+    } else {
+        throw new AppError("ประเภทการยืนยัน 2FA ไม่ถูกต้อง", 400);
+    }
 }

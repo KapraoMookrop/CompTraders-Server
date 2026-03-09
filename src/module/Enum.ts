@@ -100,3 +100,9 @@ export enum DisputeStatus {
   RESOLVED = "RESOLVED",
   REJECTED = "REJECTED",
 }
+
+// ประเภทของการยืนยัน 2FA
+export enum Verify2FAType {
+  VERIFYLOGIN = "VERIFYLOGIN",
+  VERIFYENABLE = "VERIFYENABLE",
+}
