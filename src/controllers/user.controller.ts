@@ -11,8 +11,6 @@ export async function SignUp(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function Login(req: Request, res: Response, next: NextFunction) {
-  const loginResponseData = await userService.Login(req.body.Email, req.body.Password);
-  res.json(loginResponseData);
   try {
     const response = await userService.Login(req.body.email, req.body.password);
 
