@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ยืนยันอีเมลของคุณ - CompTraders</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Reset สำหรับ Email Client */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f9fafb;
+            font-family: 'Kanit', Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        table {
+            border-spacing: 0;
+            width: 100%;
+        }
+
+        td {
+            padding: 0;
+        }
+
+        img {
+            border: 0;
+        }
+
+        /* Container หลัก */
+        .wrapper {
+            width: 100%;
+            table-layout: fixed;
+            background-color: #f9fafb;
+            padding-bottom: 40px;
+        }
+
+        .main-content {
+            background-color: #ffffff;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 600px;
+            border-spacing: 0;
+            color: #28312a;
+            border-radius: 32px;
+            overflow: hidden;
+            margin-top: 40px;
+            box-shadow: 0 10px 25px rgba(5, 150, 105, 0.05);
+        }
+
+        /* Header พื้นที่สีเขียว */
+        .header {
+            background-color: #059669;
+            padding: 40px 20px;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin: 0;
+        }
+
+        /* Body ของอีเมล */
+        .body-section {
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .welcome-text {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #059669;
+        }
+
+        .description {
+            font-size: 16px;
+            color: #4b5563;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+
+        /* ปุ่มยืนยัน */
+        .btn-container {
+            margin-bottom: 32px;
+        }
+
+        .btn {
+            background-color: #059669;
+            color: #ffffff !important;
+            padding: 16px 40px;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 20px;
+            display: inline-block;
+            transition: background-color 0.3s ease;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .footer a {
+            color: #059669;
+            text-decoration: none;
+        }
+
+        .security-note {
+            background-color: #f3f4f6;
+            padding: 15px;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <table class="main-content">
+            <tr>
+                <td class="header">
+                    {{header}}
+                </td>
+            </tr>
+            <tr>
+                <td class="body-section">
+                    {{description}}
+                    {{body}}
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+
+</html>

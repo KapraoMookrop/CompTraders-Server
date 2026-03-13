@@ -19,3 +19,13 @@ export async function Login(req: Request, res: Response, next: NextFunction) {
     next(error);
   }
 }
+
+export async function CheckAlreadyExistsEmail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { email } = req.query;
+    const exists = await userService.CheckAlreadyExistsEmail(email as string);
+    res.json({ exists });
+  } catch (error) {
+    next(error);
+  }
+}

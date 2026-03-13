@@ -6,6 +6,7 @@ const router = Router();
 
 router.post("/SignUp", userController.SignUp);
 router.post("/Login", userController.Login);
+router.get("/CheckAlreadyExistsEmail", userController.CheckAlreadyExistsEmail);
 router.post("/GetJwt", authenticateToken, (req, res) => {
   res.json({ message: "This is a protected route", user: (req as any).user });
 });

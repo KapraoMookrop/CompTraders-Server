@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { CLIENT_RENEG_LIMIT } from "tls";
 
 dotenv.config();
 
@@ -12,4 +13,6 @@ export const ENV = {
   DB_NAME: process.env.DB_NAME!,
 
   JWT_SECRET: process.env.JWT_SECRET!,
+
+  CLIENT_URL: process.env.CLIENT_URL!,
 };
