@@ -4,7 +4,7 @@ import type { SendMessagesRequest } from "../module/SendMessagesRequest.js";
 // import { getIO } from "../socket.js";
 import axios from "axios";
 import type { ReadMessagesRequest } from "../module/ReadMessagesRequest.js";
-import { AppError } from "../errors/AppError.js";
+import { AppError } from "../utils/errors/AppError.js";
 import type { MessageRequestData } from "../module/MessageRequestData.js";
 import type { MessageDataList } from "../module/MessageDataList.js";
 import type { MessageData } from "../module/MessageData.js";

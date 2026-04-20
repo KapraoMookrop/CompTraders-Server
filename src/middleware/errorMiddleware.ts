@@ -1,5 +1,5 @@
 import { type NextFunction, type Request, type Response } from "express";
-import { AppError } from "../errors/AppError.js";
+import { AppError } from "../utils/errors/AppError.js";
 
 export function errorMiddleware(
   err: Error,

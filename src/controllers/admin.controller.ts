@@ -16,10 +16,9 @@ export async function getIdCardImage(req: Request, res: Response, next: NextFunc
   try {
     const { sellerId } = req.params;
 
-    const filePath = await adminService.getIdCardImagePath(sellerId as string);
-
-    res.setHeader('Cache-Control', 'no-store'); 
-    res.sendFile(filePath);
+    const stream = await adminService.getIdCardImagePath(sellerId as string);
+    res.setHeader('Content-Type', 'image/jpeg');
+    stream.pipe(res);
 
   } catch (error) {
     next(error);
@@ -30,10 +29,10 @@ export async function getSelfieImage(req: Request, res: Response, next: NextFunc
   try {
     const { sellerId } = req.params;
 
-    const filePath = await adminService.getSelfieImagePath(sellerId as string);
+    const stream = await adminService.getSelfieImagePath(sellerId as string);
 
-    res.setHeader('Cache-Control', 'no-store');
-    res.sendFile(filePath);
+    res.setHeader('Content-Type', 'image/jpeg');
+    stream.pipe(res);
 
   } catch (error) {
     next(error);

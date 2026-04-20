@@ -1,7 +1,8 @@
 import path from 'path';
 import pool from '../config/database.js';
-import { AppError } from '../errors/AppError.js';
+import { AppError } from "../utils/errors/AppError.js";
 import type { SellerData } from '../module/SellerData.js';
+import { drive } from '../config/driveConfig.js';
 
 export async function getSellerVerification(): Promise<SellerData[]> {
     const sql = await pool.query(
@@ -24,7 +25,7 @@ export async function getSellerVerification(): Promise<SellerData[]> {
     return result
 }
 
-export async function getIdCardImagePath(sellerId: string): Promise<string> {
+export async function getIdCardImagePath(sellerId: string) {
     const result = await pool.query(
         `SELECT id_card_url FROM ct.seller_verifications WHERE user_id = $1`,
         [sellerId]
@@ -34,10 +35,16 @@ export async function getIdCardImagePath(sellerId: string): Promise<string> {
         throw new AppError('ไม่พบรูปบัตรประชาชน', 404);
     }
 
-    return path.join(process.cwd(), 'storage', result.rows[0].id_card_url);
+    const idCardId = result.rows[0].id_card_url;
+    const idCard = await drive.files.get(
+        { fileId: idCardId, alt: 'media' },
+        { responseType: 'stream' }
+    );
+
+    return idCard.data
 }
 
-export async function getSelfieImagePath(sellerId: string): Promise<string> {
+export async function getSelfieImagePath(sellerId: string) {
     const result = await pool.query(
         `SELECT selfie_url FROM ct.seller_verifications WHERE user_id = $1`,
         [sellerId]
@@ -47,5 +54,11 @@ export async function getSelfieImagePath(sellerId: string): Promise<string> {
         throw new AppError('ไม่พบรูป selfie', 404);
     }
 
-    return path.join(process.cwd(), 'storage', result.rows[0].selfie_url);
+    const selfieId = result.rows[0].selfie_url;
+    const selfie = await drive.files.get(
+        { fileId: selfieId, alt: 'media' },
+        { responseType: 'stream' }
+    );
+
+    return selfie.data;
 }

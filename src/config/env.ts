@@ -15,5 +15,10 @@ export const ENV = {
   JWT_SECRET: process.env.JWT_SECRET!,
 
   CLIENT_URL: process.env.CLIENT_URL!,
-  SOCKET_URL: process.env.SOCKET_URL!
+  SOCKET_URL: process.env.SOCKET_URL!,
+
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET!,
+  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI!,
+  GOOGLE_REFRESH_TOKEN: process.env.GOOGLE_REFRESH_TOKEN!,
 };

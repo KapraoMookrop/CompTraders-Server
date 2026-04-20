@@ -1,18 +1,14 @@
 import pool from "../config/database.js";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { type SignUpDataRequest } from "../module/SignUpDataRequest.js";
 import { KycStatus, UserStatus, UserRole } from "../module/Enum.js";
 import type { UUID } from "node:crypto";
-import { ENV } from "../config/env.js";
 import { type LoginResponseData } from "../module/LoginResponseData.js";
-import { AppError } from "../errors/AppError.js";
+import { AppError } from "../utils/errors/AppError.js";
 import * as Core from "./core.service.js";
 import type { UserLoginDataRequest } from "../module/UserLoginDataRequest.js";
-import fs from 'fs/promises';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import type { ApplySellerRequestData } from "../module/ApplySellerRequestData.js";
+import { uploadFileToDrive } from "../utils/drive-upload/GoogleDrive.js";
 
 export async function SignUp(request: SignUpDataRequest): Promise<UUID> {
   const { FullName, Email, Password, Phone, AddressInfo, ProvinceId, DistrictId, SubDistrictId, ZipCode } = request;
@@ -105,30 +101,23 @@ export async function CheckAlreadyExistsEmail(email: string): Promise<boolean> {
   return false;
 }
 
-export async function ApplySeller(userId: string, request: ApplySellerRequestData) {
-  const { IdCardImage, SelfieImage, BankId, BankNumber } = request;
+export async function ApplySeller(userId: string, userFullName: string, request: ApplySellerRequestData) {
   try {
-    const now = new Date();
-    const dateString = now.toISOString().split('T')[0];
-    const relativeDir = `verifications/${dateString}`;
-    const uploadDir = path.join(process.cwd(), 'storage', relativeDir);
+    const { IdCardImage, SelfieImage, BankId, BankNumber } = request;
+    const configFolderId = await pool.query("SELECT value FROM ct.configuration WHERE code = 'GoogleDriveFolderId'");
+    if (configFolderId.rows.length === 0) {
+      throw new AppError("ไม่พบการตั้งค่าโฟลเดอร์บน Google Drive กรุณาติดต่อผู้ดูแลระบบ", 500);
+    }
+    const FOLDER_ID = configFolderId.rows[0].value;
 
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const idCardFileName = `id_${userId}_${uuidv4()}${path.extname(IdCardImage.originalname)}`;
-    const selfieFileName = `selfie_${userId}_${uuidv4()}${path.extname(SelfieImage.originalname)}`;
-
-    await fs.rename(IdCardImage.path, path.join(uploadDir, idCardFileName));
-    await fs.rename(SelfieImage.path, path.join(uploadDir, selfieFileName));
-
-    const idCardPathForDb = path.join(relativeDir, idCardFileName);
-    const selfiePathForDb = path.join(relativeDir, selfieFileName);
+    const idCard = await uploadFileToDrive(IdCardImage, `idCard_${userId}_${Date.now()}.jpg`, FOLDER_ID, userFullName);
+    const selfie = await uploadFileToDrive(SelfieImage, `selfie_${userId}_${Date.now()}.jpg`, FOLDER_ID, userFullName);
 
     await pool.query(
       `INSERT INTO ct.seller_verifications 
       (user_id, id_card_url, selfie_url, status, bank_id, bank_number) 
       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userId, idCardPathForDb, selfiePathForDb, KycStatus.PENDING, BankId, BankNumber]
+      [userId, idCard.id, selfie.id, 'PENDING', BankId, BankNumber]
     );
 
   } catch (error) {

@@ -1,7 +1,7 @@
 import type { UUID } from "node:crypto";
 import pool from "../config/database.js";
 import { type CreateDealRequest } from "../module/CreateDealRequest.js";
-import { AppError } from "../errors/AppError.js";
+import { AppError } from "../utils/errors/AppError.js";
 import type { CreateChatRoomRequest } from "../module/CreateChatRoomRequest.js";
 import { ChatRoomMemberStatus, ChatRoomStatus, NotificationType } from "../module/Enum.js";
 import type { UserJWT } from "../module/UserJWT.js";

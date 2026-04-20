@@ -1,5 +1,5 @@
 import pool from "../config/database.js";
-import { AppError } from "../errors/AppError.js";
+import { AppError } from "../utils/errors/AppError.js";
 import type { DistrictData } from "../module/DistrictData.js";
 import { UserRole, UserStatus, Verify2FAType } from "../module/Enum.js";
 import type { LoginResponseData } from "../module/LoginResponseData.js";
