@@ -54,3 +54,13 @@ export async function ApplySeller(req: Request, res: Response, next: NextFunctio
     next(error);
   }
 }
+
+export async function GetUserClientData(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { userId } = (req as any).user as UserJWT;
+    const userClientData = await userService.GetUserClientData(userId);
+    res.json(userClientData);
+  } catch (error) {
+    next(error);
+  }
+}

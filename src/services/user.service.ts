@@ -1,7 +1,7 @@
 import pool from "../config/database.js";
 import bcrypt from "bcrypt";
 import { type SignUpDataRequest } from "../module/SignUpDataRequest.js";
-import { KycStatus, UserStatus, UserRole } from "../module/Enum.js";
+import { KycStatus, UserStatus, UserRole, SellerVerificationStatus } from "../module/Enum.js";
 import type { UUID } from "node:crypto";
 import { type LoginResponseData } from "../module/LoginResponseData.js";
 import { AppError } from "../utils/errors/AppError.js";
@@ -9,6 +9,7 @@ import * as Core from "./core.service.js";
 import type { UserLoginDataRequest } from "../module/UserLoginDataRequest.js";
 import type { ApplySellerRequestData } from "../module/ApplySellerRequestData.js";
 import { uploadFileToDrive } from "../utils/drive-upload/GoogleDrive.js";
+import type { UserClientData } from "../module/UserClientData.js";
 
 export async function SignUp(request: SignUpDataRequest): Promise<UUID> {
   const { FullName, Email, Password, Phone, AddressInfo, ProvinceId, DistrictId, SubDistrictId, ZipCode } = request;
@@ -102,6 +103,7 @@ export async function CheckAlreadyExistsEmail(email: string): Promise<boolean> {
 }
 
 export async function ApplySeller(userId: string, userFullName: string, request: ApplySellerRequestData) {
+  const client = await pool.connect();
   try {
     const { IdCardImage, SelfieImage, BankId, BankNumber } = request;
     const configFolderId = await pool.query("SELECT value FROM ct.configuration WHERE code = 'GoogleDriveFolderId'");
@@ -113,14 +115,56 @@ export async function ApplySeller(userId: string, userFullName: string, request:
     const idCard = await uploadFileToDrive(IdCardImage, `idCard_${userId}_${Date.now()}.jpg`, FOLDER_ID, userFullName);
     const selfie = await uploadFileToDrive(SelfieImage, `selfie_${userId}_${Date.now()}.jpg`, FOLDER_ID, userFullName);
 
-    await pool.query(
+
+    client.query("BEGIN");
+
+    await client.query(
       `INSERT INTO ct.seller_verifications 
       (user_id, id_card_url, selfie_url, status, bank_id, bank_number) 
       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userId, idCard.id, selfie.id, 'PENDING', BankId, BankNumber]
+      [userId, idCard.id, selfie.id, SellerVerificationStatus.PENDING, BankId, BankNumber]
     );
 
+    await client.query("COMMIT");
   } catch (error) {
+    client.query("ROLLBACK");
     throw new AppError(`เกิดข้อผิดพลาดในการส่งคำขอ: ${error}`, 500);
   }
+}
+
+export async function GetUserClientData(userId: string): Promise<UserClientData> {
+  const result = await pool.query(
+    `SELECT 
+      u.full_name,
+      u.email,
+      u.phone,
+      u.role,
+      u.kyc_status,
+      u.status,
+      u.twofa_enabled,
+      sv.status AS seller_verification_status
+    FROM ct.users as u 
+    LEFT JOIN ct.seller_verifications sv ON u.id = sv.user_id
+    WHERE u.id = $1`,
+    [userId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AppError("ไม่พบข้อมูลผู้ใช้", 404);
+  }
+
+  const user = result.rows[0];
+
+  const userClientData: UserClientData = {
+    FullName: user.full_name,
+    Email: user.email,
+    Phone: user.phone,
+    Role: user.role,
+    KycStatus: user.kyc_status,
+    UserStatus: user.status,
+    IsEnabled2FA: user.twofa_enabled,
+    SellerVerificationStatus: user.seller_verification_status
+  };
+
+  return userClientData;
 }

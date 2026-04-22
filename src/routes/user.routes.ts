@@ -18,8 +18,6 @@ router.post("/ApplySeller", authenticateToken, upload.fields([
   { name: 'IdCardImage', maxCount: 1 },
   { name: 'SelfieImage', maxCount: 1 }
 ]), userController.ApplySeller);
-router.post("/GetJwt", authenticateToken, (req, res) => {
-  res.json({ message: "This is a protected route", user: (req as any).user });
-});
+router.get("/GetUserClientData", authenticateToken, userController.GetUserClientData);
 
 export default router;

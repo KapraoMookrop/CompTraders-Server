@@ -1,4 +1,4 @@
-import type { KycStatus, UserRole, UserStatus } from "./Enum.js";
+import type { KycStatus, SellerVerificationStatus, UserRole, UserStatus } from "./Enum.js";
 
 export interface UserClientData {
     FullName: string;
@@ -8,4 +8,5 @@ export interface UserClientData {
     KycStatus: KycStatus;
     UserStatus: UserStatus;
     IsEnabled2FA: boolean;
+    SellerVerificationStatus: SellerVerificationStatus;
 }

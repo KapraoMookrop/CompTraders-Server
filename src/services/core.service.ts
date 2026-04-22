@@ -207,6 +207,7 @@ export async function SignJWT(user: any) {
             kycStatus: user.kyc_status,
             userStatus: user.status,
             isEnabled2FA: user.twofa_enabled,
+            sellerVerificationStatus: user.seller_verification_status
         },
         ENV.JWT_SECRET,
         { expiresIn: "1d" }
