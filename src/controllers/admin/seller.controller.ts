@@ -1,10 +1,9 @@
 import { type NextFunction, type Request, type Response } from "express";
-import * as adminService from "../services/admin.service.js";
+import * as adminService from "../../services/admin/seller.service.js";
 
-export async function getSellerVerification(req: Request, res: Response, next: NextFunction) {
+export async function FindAsync(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await adminService.getSellerVerification();
-
+    const data = await adminService.FindAsync(req.body);
     res.json(data);
 
   } catch (error) {
