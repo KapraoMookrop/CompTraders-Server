@@ -7,7 +7,10 @@ export interface SellerData {
     Phone: string;
     SellerStatus: SellerVerificationStatus;
     BankId: string;
+    BankName: string;
     BankNumber: string;
     IdCardImageUrl: string;
     SelfieImageUrl: string;
+    IdCardImage: any;
+    SelfieImage: any;
 }

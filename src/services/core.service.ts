@@ -16,6 +16,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import type { DropDownData } from "../module/DropDownData.js";
 import type { NotificationData } from "../module/NotificationData.js";
+import type { MailTemplateReplacements } from "../module/MailTemplateReplacements.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -388,7 +390,7 @@ export async function MarkAllNotificationsAsRead(userId: string) {
     );
 }
 
-function GetMailTemplate(templateName: string, replacements: MailTemplateReplacements) {
+export function GetMailTemplate(templateName: string, replacements: MailTemplateReplacements) {
     const templatePath = path.join(__dirname, "../mail-template", `${templateName}.html`);
     let html = fs.readFileSync(templatePath, "utf8");
     html = html.replaceAll("{{header}}", replacements.header);
@@ -398,7 +400,7 @@ function GetMailTemplate(templateName: string, replacements: MailTemplateReplace
     return html;
 }
 
-async function GetCoreMail() {
+export async function GetCoreMail() {
     const sqlCoreMailPassword = await pool.query(
         "select * from ct.configuration where code = 'CoreMailPassword'"
     );
@@ -420,10 +422,4 @@ async function GetCoreMail() {
     });
 
     return { transporter: transporter, CoreMailUser: CoreMailUser };
-}
-
-interface MailTemplateReplacements {
-    header: string;
-    description: string;
-    body: string;
 }

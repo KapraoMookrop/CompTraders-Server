@@ -5,7 +5,8 @@ import * as adminController from '../controllers/admin/seller.controller.js';
 const router = express.Router();
 
 router.post('/Seller/FindAsync', authenticateToken, requireAdmin, adminController.FindAsync);
-router.get('/Seller/GetIdCard/:sellerId', authenticateToken, requireAdmin, adminController.getIdCardImage);
-router.get('/Seller/GetSelfie/:sellerId', authenticateToken, requireAdmin, adminController.getSelfieImage);
+router.get('/Seller/GetSellerByIdAsync', authenticateToken, requireAdmin, adminController.GetSellerByIdAsync);
+router.post('/Seller/ApproveSellerAsync', authenticateToken, requireAdmin, adminController.ApproveSellerAsync);
+router.post('/Seller/RejectSellerAsync', authenticateToken, requireAdmin, adminController.RejectSellerAsync);
 
 export default router;

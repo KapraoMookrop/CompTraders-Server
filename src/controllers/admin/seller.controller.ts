@@ -11,28 +11,31 @@ export async function FindAsync(req: Request, res: Response, next: NextFunction)
   }
 }
 
-export async function getIdCardImage(req: Request, res: Response, next: NextFunction) {
+export async function GetSellerByIdAsync(req: Request, res: Response, next: NextFunction) {
   try {
-    const { sellerId } = req.params;
-
-    const stream = await adminService.getIdCardImagePath(sellerId as string);
-    res.setHeader('Content-Type', 'image/jpeg');
-    stream.pipe(res);
-
+    const sellerId = req.query.sellerId as string;
+    const data = await adminService.GetSellerByIdAsync(sellerId);
+    res.json(data);
   } catch (error) {
     next(error);
   }
 }
 
-export async function getSelfieImage(req: Request, res: Response, next: NextFunction) {
+export async function ApproveSellerAsync(req: Request, res: Response, next: NextFunction) {
   try {
-    const { sellerId } = req.params;
+    const sellerId = req.body.sellerId as string;
+    await adminService.ApproveSellerAsync(sellerId);
+    res.json({ message: "ยืนยันผู้ขายเรียบร้อยแล้ว" });
+  } catch (error) {
+    next(error);
+  }
+}
 
-    const stream = await adminService.getSelfieImagePath(sellerId as string);
-
-    res.setHeader('Content-Type', 'image/jpeg');
-    stream.pipe(res);
-
+export async function RejectSellerAsync(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { sellerId, comment } = req.body;
+    await adminService.RejectSellerAsync(sellerId, comment);
+    res.json({ message: "ปฏิเสธผู้ขายเรียบร้อยแล้ว" });
   } catch (error) {
     next(error);
   }
