@@ -206,13 +206,13 @@ async function getSelfieImagePath(sellerId: string) {
     return `data:image/jpeg;base64,${buffer.toString('base64')}`;
 }
 
-export async function ApproveSellerAsync(userId: string) {
+export async function ApproveSellerAsync(userId: string, reviewedBy: string) {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
         await client.query(
-            `UPDATE ct.seller_verifications SET status = $2 WHERE user_id = $1 RETURNING user_id`,
-            [userId, SellerVerificationStatus.APPROVED]
+            `UPDATE ct.seller_verifications SET status = $2, reviewed_by = $3 WHERE user_id = $1 RETURNING user_id`,
+            [userId, SellerVerificationStatus.APPROVED, reviewedBy]
         );
 
         const resultUserEmail = await client.query(
@@ -231,13 +231,13 @@ export async function ApproveSellerAsync(userId: string) {
     }
 }
 
-export async function RejectSellerAsync(userId: string, comment: string) {
+export async function RejectSellerAsync(userId: string, comment: string, reviewedBy: string) {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
         await client.query(
-            `UPDATE ct.seller_verifications SET status = $2, comment = $3 WHERE user_id = $1 RETURNING user_id`,
-            [userId, SellerVerificationStatus.REJECTED, comment]
+            `UPDATE ct.seller_verifications SET status = $2, comment = $3, reviewed_by = $4 WHERE user_id = $1 RETURNING user_id`,
+            [userId, SellerVerificationStatus.REJECTED, comment, reviewedBy]
         );
 
         const resultUserEmail = await client.query(

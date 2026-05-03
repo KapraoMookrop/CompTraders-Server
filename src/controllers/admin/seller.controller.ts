@@ -24,7 +24,8 @@ export async function GetSellerByIdAsync(req: Request, res: Response, next: Next
 export async function ApproveSellerAsync(req: Request, res: Response, next: NextFunction) {
   try {
     const sellerId = req.body.sellerId as string;
-    await adminService.ApproveSellerAsync(sellerId);
+    const reviewedBy = (req as any).user?.fullName;
+    await adminService.ApproveSellerAsync(sellerId, reviewedBy);
     res.json({ message: "ยืนยันผู้ขายเรียบร้อยแล้ว" });
   } catch (error) {
     next(error);
@@ -34,7 +35,8 @@ export async function ApproveSellerAsync(req: Request, res: Response, next: Next
 export async function RejectSellerAsync(req: Request, res: Response, next: NextFunction) {
   try {
     const { sellerId, comment } = req.body;
-    await adminService.RejectSellerAsync(sellerId, comment);
+    const reviewedBy = (req as any).user?.fullName;
+    await adminService.RejectSellerAsync(sellerId, comment, reviewedBy);
     res.json({ message: "ปฏิเสธผู้ขายเรียบร้อยแล้ว" });
   } catch (error) {
     next(error);
