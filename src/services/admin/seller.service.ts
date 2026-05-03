@@ -127,10 +127,12 @@ export async function GetSellerByIdAsync(userId: string) {
         u.full_name,
         u.email,
         u.phone,
-        b.name_th as bank_name
+        b.name_th as bank_name,
+        u2.full_name as reviewed_by
     FROM ct.seller_verifications as sv
     LEFT JOIN ct.users as u ON sv.user_id = u.id
     LEFT JOIN ct.banks as b ON sv.bank_id = b.id
+    LEFT JOIN ct.users as u2 ON sv.reviewed_by = u2.id
     WHERE sv.user_id = $1`, [userId]);
 
     if (result.rowCount === 0) {
@@ -152,6 +154,7 @@ export async function GetSellerByIdAsync(userId: string) {
         BankName: seller.bank_name,
         IdCardImage: idCardImage,
         SelfieImage: selfieImage,
+        ReviewedBy : seller.reviewed_by
     } as SellerData;
 
     return sellerData;

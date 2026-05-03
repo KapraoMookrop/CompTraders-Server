@@ -13,4 +13,5 @@ export interface SellerData {
     SelfieImageUrl: string;
     IdCardImage: any;
     SelfieImage: any;
+    ReviewedBy: string;
 }
