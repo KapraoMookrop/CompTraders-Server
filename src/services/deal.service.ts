@@ -3,9 +3,10 @@ import pool from "../config/database.js";
 import { type CreateDealRequest } from "../module/CreateDealRequest.js";
 import { AppError } from "../utils/errors/AppError.js";
 import type { CreateChatRoomRequest } from "../module/CreateChatRoomRequest.js";
-import { ChatRoomMemberStatus, ChatRoomStatus, NotificationType } from "../module/Enum.js";
+import { ChatRoomMemberStatus, ChatRoomStatus, NotificationType, DealStatus, ShipmentStatus } from "../module/Enum.js";
 import type { UserJWT } from "../module/UserJWT.js";
 import { uploadFileToDrive } from "../utils/drive-upload/GoogleDrive.js";
+import axios from "axios";
 
 export async function CreateChatRoom(request: CreateChatRoomRequest, UserJWT: UserJWT): Promise<UUID> {
     const { CreatorId, InviteeId } = request;
@@ -179,11 +180,182 @@ export async function UploadPaymentSlip(dealId: string, buyerId: string, userFul
             [paymentId, uploadResult.id]
         );
 
+        // ดึงข้อมูลห้องแชทของดีลนี้เพื่อบันทึกและแจ้งเตือนข้อความระบบ
+        const dealInfo = await client.query(
+            "SELECT chat_room_id FROM ct.deals WHERE id = $1",
+            [dealId]
+        );
+        const chatRoomId = dealInfo.rows[0].chat_room_id;
+
+        // บันทึกข้อความแจ้งเตือนสลิปในห้องแชท
+        const systemMessageContent = `[ระบบ] ผู้ซื้อได้อัปโหลดหลักฐานการโอนเงินเรียบร้อยแล้ว รอผู้ดูแลระบบตรวจสอบยอดเงิน`;
+        const messageInsert = await client.query(
+            `INSERT INTO ct.messages (chat_room_id, sender_id, content_type, content)
+             VALUES ($1, $2, 'TEXT', $3) RETURNING *`,
+            [chatRoomId, buyerId, systemMessageContent]
+        );
+        const newMessage = messageInsert.rows[0];
+
         await client.query("COMMIT");
+
+        // ดึงสมาชิกห้องแชทอื่นที่ไม่ใช่ผู้ส่งเพื่อส่ง Socket update
+        const members = await pool.query(
+            `SELECT user_id FROM ct.chat_room_members WHERE chat_room_id = $1 AND user_id != $2`,
+            [chatRoomId, buyerId]
+        );
+
+        // ยิง API ไปยัง socket server เพื่อให้ฝั่งผู้ขายหน้าจออัปเดตเรียลไทม์
+        try {
+            await Promise.all(
+                members.rows.map((m) =>
+                    axios.post(process.env.SOCKET_URL + "/emit", {
+                        type: "new-message",
+                        chatRoomId: chatRoomId,
+                        userId: m.user_id,
+                        message: {
+                            Id: newMessage.id,
+                            ChatRoomId: newMessage.chat_room_id,
+                            SenderId: newMessage.sender_id,
+                            SenderName: userFullName,
+                            ContentType: newMessage.content_type,
+                            Content: newMessage.content,
+                            CreatedAt: newMessage.created_at
+                        }
+                    })
+                )
+            );
+        } catch (err) {
+            console.error("Failed to emit upload slip socket notification:", err);
+        }
+
         return { success: true, paymentId };
     } catch (error) {
         await client.query("ROLLBACK");
         throw new AppError(`เกิดข้อผิดพลาดในการบันทึกหลักฐานการโอนเงิน: ${error}`, 500);
+    } finally {
+        client.release();
+    }
+}
+
+// ฟังก์ชันจำลองการเรียกใช้ Tracking API เพื่อตรวจสอบความถูกต้องของเลขพัสดุ
+async function validateTrackingNumberWithCarrier(carrier: string, trackingNumber: string): Promise<boolean> {
+    // ในอนาคตสามารถเชื่อมต่อกับ API ของขนส่งจริง เช่น Flash Express, Kerry Express, DHL, Thailand Post ได้ที่นี่
+    // ตัวอย่างการทำงาน:
+    // try {
+    //     const apiKey = process.env.CARRIER_API_KEY;
+    //     const response = await axios.get(`https://api.carrier.com/v1/track?carrier=${carrier}&num=${trackingNumber}`, {
+    //         headers: { 'Authorization': `Bearer ${apiKey}` }
+    //     });
+    //     return response.data.status === 'valid';
+    // } catch (e) {
+    //     console.error("Carrier API error:", e);
+    //     return false;
+    // }
+
+    // ปัจจุบันเป็น Dummy ตรวจสอบผ่านเสมอ (ตามข้อกำหนดของระบบ)
+    return true;
+}
+
+export async function ShipDeal(dealId: string, sellerId: string, userFullName: string, carrier: string, trackingNumber: string, file: Express.Multer.File) {
+    // 0. เรียกใช้ระบบตรวจสอบเลขพัสดุผ่าน API ของขนส่ง
+    const isTrackingValid = await validateTrackingNumberWithCarrier(carrier, trackingNumber);
+    if (!isTrackingValid) {
+        throw new AppError("เลขพัสดุไม่ถูกต้องหรือไม่พบข้อมูลในระบบของขนส่ง", 400);
+    }
+
+    const configFolderId = await pool.query("SELECT value FROM ct.configuration WHERE code = 'GoogleDriveFolderId'");
+    if (configFolderId.rows.length === 0) {
+        throw new AppError("ไม่พบการตั้งค่าโฟลเดอร์บน Google Drive กรุณาติดต่อผู้ดูแลระบบ", 500);
+    }
+    const FOLDER_ID = configFolderId.rows[0].value;
+
+    // อัปโหลดไฟล์รูปภาพพัสดุไปยัง Google Drive
+    const uploadResult = await uploadFileToDrive(file, `package_${dealId}_${Date.now()}.jpg`, FOLDER_ID, userFullName);
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        // 1. อัปเดตสถานะดีลเป็น SHIPPING และกำหนดวัน Release เงินเข้า Escrow อัตโนมัติ (เช่น 7 วันข้างหน้า)
+        await client.query(
+            `UPDATE ct.deals
+             SET status = $2, auto_release_at = NOW() + INTERVAL '7 days'
+             WHERE id = $1`,
+            [dealId, DealStatus.SHIPPING]
+        );
+
+        // 2. บันทึกข้อมูลการจัดส่งใน ct.shipments
+        const shipmentInsert = await client.query(
+            `INSERT INTO ct.shipments (deal_id, carrier, tracking_number, status, shipped_at)
+             VALUES ($1, $2, $3, $4, NOW()) RETURNING id`,
+            [dealId, carrier, trackingNumber, ShipmentStatus.SHIPPED]
+        );
+        const shipmentId = shipmentInsert.rows[0].id;
+
+        // 3. บันทึกรูปถ่ายพัสดุใน ct.deal_files
+        await client.query(
+            `INSERT INTO ct.deal_files (deal_id, file_url, file_type, uploaded_by)
+             VALUES ($1, $2, 'IMAGE', $3)`,
+            [dealId, uploadResult.id, sellerId]
+        );
+
+        // 4. บันทึกประวัติการจัดส่งใน ct.shipment_tracking_events
+        await client.query(
+            `INSERT INTO ct.shipment_tracking_events (shipment_id, status, location, description, event_time)
+             VALUES ($1, $2, 'คลังสินค้าต้นทาง', 'ผู้ขายได้ทำการจัดส่งสินค้าและเข้าระบบเรียบร้อยแล้ว', NOW())`,
+            [shipmentId, ShipmentStatus.SHIPPED]
+        );
+
+        // 5. บันทึกข้อความแจ้งการจัดส่งพัสดุในห้องแชท
+        const dealInfo = await client.query(
+            "SELECT chat_room_id FROM ct.deals WHERE id = $1",
+            [dealId]
+        );
+        const chatRoomId = dealInfo.rows[0].chat_room_id;
+
+        const systemMessageContent = `[ระบบ] ผู้ขายได้จัดส่งสินค้าเรียบร้อยแล้ว\nขนส่ง: ${carrier}\nเลขพัสดุ: ${trackingNumber}`;
+        const messageInsert = await client.query(
+            `INSERT INTO ct.messages (chat_room_id, sender_id, content_type, content)
+             VALUES ($1, $2, 'TEXT', $3) RETURNING *`,
+            [chatRoomId, sellerId, systemMessageContent]
+        );
+        const newMessage = messageInsert.rows[0];
+
+        await client.query("COMMIT");
+
+        // 6. ดึงข้อมูลสมาชิกแชทอื่นเพื่อกระจายข้อความ Socket ให้หน้าจออัปเดตแบบเรียลไทม์
+        const members = await pool.query(
+            `SELECT user_id FROM ct.chat_room_members WHERE chat_room_id = $1 AND user_id != $2`,
+            [chatRoomId, sellerId]
+        );
+
+        try {
+            await Promise.all(
+                members.rows.map((m) =>
+                    axios.post(process.env.SOCKET_URL + "/emit", {
+                        type: "new-message",
+                        chatRoomId: chatRoomId,
+                        userId: m.user_id,
+                        message: {
+                            Id: newMessage.id,
+                            ChatRoomId: newMessage.chat_room_id,
+                            SenderId: newMessage.sender_id,
+                            SenderName: userFullName,
+                            ContentType: newMessage.content_type,
+                            Content: newMessage.content,
+                            CreatedAt: newMessage.created_at
+                        }
+                    })
+                )
+            );
+        } catch (err) {
+            console.error("Failed to emit ship deal socket notification:", err);
+        }
+
+        return { success: true, shipmentId };
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw new AppError(`เกิดข้อผิดพลาดในการบันทึกข้อมูลการจัดส่ง: ${error}`, 500);
     } finally {
         client.release();
     }

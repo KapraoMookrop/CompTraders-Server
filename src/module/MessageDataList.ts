@@ -13,6 +13,11 @@ export interface ActiveDealData {
     PaymentStatus?: string | undefined;
     SlipUrl?: string | undefined;
     SlipImageBase64?: string | undefined;
+    Carrier?: string | undefined;
+    TrackingNumber?: string | undefined;
+    ShipmentStatus?: string | undefined;
+    PackageImageUrl?: string | undefined;
+    PackageImageBase64?: string | undefined;
 }
 
 export interface MessageDataList {

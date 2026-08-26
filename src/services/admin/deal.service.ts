@@ -4,7 +4,8 @@ import { drive } from '../../config/driveConfig.js';
 import type { DealSearchCriteria } from '../../module/DealSearchCriteria.js';
 import type { DealAdminData } from '../../module/DealAdminData.js';
 import type { ResponseData } from '../../module/ResponseData.js';
-import { DealStatus, PaymentStatus } from '../../module/Enum.js';
+import { DealStatus, EscrowTransactionType, EscrowWalletStatus, PaymentStatus } from '../../module/Enum.js';
+import axios from 'axios';
 
 export async function FindAsync(criteria: DealSearchCriteria): Promise<ResponseData<DealAdminData>> {
     const page = criteria.Page ?? 1;
@@ -52,7 +53,7 @@ export async function FindAsync(criteria: DealSearchCriteria): Promise<ResponseD
     ${whereSql}
     ORDER BY ${sortColumn} ${sortDirection}
     LIMIT $${params.length - 1} OFFSET $${params.length}`;
-    
+
     const dataResult = await pool.query(dataQuery, params);
 
     const countQuery = `
@@ -211,30 +212,76 @@ export async function ConfirmPayment(dealId: string): Promise<void> {
 
         // ดึงข้อมูลดีลเพื่อนำไปใส่ Escrow Wallet
         const dealResult = await client.query(
-            `SELECT amount FROM ct.deals WHERE id = $1`,
+            `SELECT amount, chat_room_id, buyer_id FROM ct.deals WHERE id = $1`,
             [dealId]
         );
         if (dealResult.rowCount === 0) {
             throw new AppError('ไม่พบข้อมูลดีล', 404);
         }
         const amount = Number(dealResult.rows[0].amount);
+        const chatRoomId = dealResult.rows[0].chat_room_id;
+        const buyerId = dealResult.rows[0].buyer_id;
 
         // 3. สร้าง Escrow Wallet (สถานะ HOLDING)
         const walletResult = await client.query(
             `INSERT INTO ct.escrow_wallets (deal_id, balance, status)
-             VALUES ($1, $2, 'HOLDING') RETURNING id`,
-            [dealId, amount]
+             VALUES ($1, $2, $3) RETURNING id`,
+            [dealId, amount, EscrowWalletStatus.HOLDING]
         );
         const walletId = walletResult.rows[0].id;
 
         // 4. บันทึก Escrow Transaction (ประเภท DEPOSIT)
         await client.query(
             `INSERT INTO ct.escrow_transactions (wallet_id, type, amount)
-             VALUES ($1, 'DEPOSIT', $2)`,
-            [walletId, amount]
+             VALUES ($1, $2, $3)`,
+            [walletId, EscrowTransactionType.DEPOSIT, amount]
         );
 
+        // ค้นหา admin user_id เพื่อนำมาใส่เป็นผู้ส่งของข้อความระบบ
+        const adminUserResult = await client.query(
+            "SELECT id FROM ct.users WHERE role = 'ADMIN' LIMIT 1"
+        );
+        const senderId = (adminUserResult.rowCount ?? 0) > 0 ? adminUserResult.rows[0].id : buyerId;
+
+        // 5. บันทึกข้อความแจ้งยืนยันยอดเงินของระบบในห้องแชท
+        const systemMessageContent = `[ระบบ] ผู้ดูแลระบบได้ยืนยันยอดเงินโอนเข้าบัญชี Escrow เรียบร้อยแล้ว ขณะนี้เงินอยู่ในระบบอย่างปลอดภัย กรุณาดำเนินการขั้นต่อไป`;
+        const messageInsert = await client.query(
+            `INSERT INTO ct.messages (chat_room_id, sender_id, content_type, content)
+             VALUES ($1, $2, 'TEXT', $3) RETURNING *`,
+            [chatRoomId, senderId, systemMessageContent]
+        );
+        const newMessage = messageInsert.rows[0];
+
         await client.query("COMMIT");
+
+        // 6. ดึงสมาชิกทั้งหมดในห้องเพื่อกระจายข้อความ Socket ให้หน้าจออัปเดตแบบเรียลไทม์
+        const members = await pool.query(
+            `SELECT user_id FROM ct.chat_room_members WHERE chat_room_id = $1`,
+            [chatRoomId]
+        );
+
+        try {
+            await Promise.all(
+                members.rows.map((m) =>
+                    axios.post(process.env.SOCKET_URL + "/emit", {
+                        type: "new-message",
+                        chatRoomId: chatRoomId,
+                        userId: m.user_id,
+                        message: {
+                            Id: newMessage.id,
+                            ChatRoomId: newMessage.chat_room_id,
+                            SenderId: newMessage.sender_id,
+                            SenderName: "ระบบ (System)",
+                            ContentType: newMessage.content_type,
+                            Content: newMessage.content,
+                            CreatedAt: newMessage.created_at
+                        }
+                    })
+                )
+            );
+        } catch (err) {
+            console.error("Failed to emit payment confirmation socket notification:", err);
+        }
     } catch (error) {
         await client.query("ROLLBACK");
         throw new AppError(`เกิดข้อผิดพลาดในการยืนยันยอดเงินเข้าระบบ Escrow: ${error}`, 500);

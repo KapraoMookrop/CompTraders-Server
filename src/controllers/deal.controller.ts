@@ -56,3 +56,18 @@ export async function UploadPaymentSlip(req: Request, res: Response, next: NextF
     next(error);
   }
 }
+
+export async function ShipDeal(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userJWT = (req as any).user as UserJWT;
+    const { dealId, carrier, trackingNumber } = req.body;
+    const file = req.file;
+    if (!file) {
+      throw new AppError("ไม่พบรูปภาพหลักฐานการส่งของ", 400);
+    }
+    const result = await dealService.ShipDeal(dealId, userJWT.userId, userJWT.fullName, carrier, trackingNumber, file);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}

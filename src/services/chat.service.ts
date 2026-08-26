@@ -141,7 +141,7 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
     const otherUserName = otherUserRow ? otherUserRow.full_name : "";
     const otherUserId = otherUserRow ? otherUserRow.user_id : undefined;
 
-    // ค้นหาดีลล่าสุดของห้องแชทนี้
+    // ค้นหาดีลล่าสุดของห้องแชทนี้ พร้อมข้อมูลการจัดส่งพัสดุและภาพถ่ายพัสดุ
     const dealQuery = await pool.query(
         `SELECT 
             d.id,
@@ -154,10 +154,16 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
             d.status,
             p.id as payment_id,
             p.status as payment_status,
-            ps.slip_url
+            ps.slip_url,
+            s.carrier,
+            s.tracking_number,
+            s.status as shipment_status,
+            df.file_url as package_image_url
          FROM ct.deals d
          LEFT JOIN ct.payments p ON d.id = p.deal_id
          LEFT JOIN ct.payment_slips ps ON p.id = ps.payment_id
+         LEFT JOIN ct.shipments s ON d.id = s.deal_id
+         LEFT JOIN ct.deal_files df ON d.id = df.deal_id AND df.file_type = 'IMAGE'
          WHERE d.chat_room_id = $1
          ORDER BY d.created_at DESC
          LIMIT 1`,
@@ -169,6 +175,7 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
     if (dealQuery.rows.length > 0) {
         const row = dealQuery.rows[0];
         let slipImageBase64: string | undefined = undefined;
+        let packageImageBase64: string | undefined = undefined;
 
         // หากมีการแนบสลิป/หลักฐาน ให้ดึงข้อมูลรูปภาพจาก Google Drive แปลงเป็น base64
         if (row.slip_url) {
@@ -188,6 +195,24 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
             }
         }
 
+        // หากมีรูปถ่ายพัสดุ ให้ดึงข้อมูลจาก Google Drive แปลงเป็น base64
+        if (row.package_image_url) {
+            try {
+                const driveResponse = await drive.files.get(
+                    { fileId: row.package_image_url, alt: 'media' },
+                    { responseType: 'stream' }
+                );
+                const chunks: any[] = [];
+                for await (const chunk of driveResponse.data) {
+                    chunks.push(chunk);
+                }
+                const buffer = Buffer.concat(chunks);
+                packageImageBase64 = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+            } catch (err) {
+                console.error("Failed to load package image from Drive:", err);
+            }
+        }
+
         activeDeal = {
             Id: row.id,
             ChatRoomId: row.chat_room_id,
@@ -200,7 +225,12 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
             PaymentId: row.payment_id || undefined,
             PaymentStatus: row.payment_status || undefined,
             SlipUrl: row.slip_url || undefined,
-            SlipImageBase64: slipImageBase64
+            SlipImageBase64: slipImageBase64,
+            Carrier: row.carrier || undefined,
+            TrackingNumber: row.tracking_number || undefined,
+            ShipmentStatus: row.shipment_status || undefined,
+            PackageImageUrl: row.package_image_url || undefined,
+            PackageImageBase64: packageImageBase64
         };
     }
 
