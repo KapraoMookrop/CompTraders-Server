@@ -6,9 +6,10 @@ import axios from "axios";
 import type { ReadMessagesRequest } from "../module/ReadMessagesRequest.js";
 import { AppError } from "../utils/errors/AppError.js";
 import type { MessageRequestData } from "../module/MessageRequestData.js";
-import type { MessageDataList } from "../module/MessageDataList.js";
+import type { MessageDataList, ActiveDealData } from "../module/MessageDataList.js";
 import type { MessageData } from "../module/MessageData.js";
 import type { ChatRoomData } from "../module/ChatRoomData.js";
+import { drive } from "../config/driveConfig.js";
 
 export async function SendMessages(request: SendMessagesRequest): Promise<MessageData> {
     const { ChatRoomId, SenderId, ContentType, Content, SenderName } = request;
@@ -125,15 +126,92 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
         File_Type: msg.file_type,
         CreatedAt: msg.created_at
     } as MessageData));
-    const currentUserName = responseMessages.find(t => t.SenderId == userId)?.SenderName || "";
-    const otherUserName = responseMessages.find(t => t.SenderId != userId)?.SenderName || "";
+    const membersResult = await pool.query(
+        `SELECT m.user_id, u.full_name
+         FROM ct.chat_room_members m
+         JOIN ct.users u ON m.user_id = u.id
+         WHERE m.chat_room_id = $1`,
+        [ChatRoomId]
+    );
+
+    const currentUserRow = membersResult.rows.find(r => r.user_id === userId);
+    const otherUserRow = membersResult.rows.find(r => r.user_id !== userId);
+
+    const currentUserName = currentUserRow ? currentUserRow.full_name : "";
+    const otherUserName = otherUserRow ? otherUserRow.full_name : "";
+    const otherUserId = otherUserRow ? otherUserRow.user_id : undefined;
+
+    // ค้นหาดีลล่าสุดของห้องแชทนี้
+    const dealQuery = await pool.query(
+        `SELECT 
+            d.id,
+            d.chat_room_id,
+            d.buyer_id,
+            d.seller_id,
+            d.title,
+            d.description,
+            d.amount,
+            d.status,
+            p.id as payment_id,
+            p.status as payment_status,
+            ps.slip_url
+         FROM ct.deals d
+         LEFT JOIN ct.payments p ON d.id = p.deal_id
+         LEFT JOIN ct.payment_slips ps ON p.id = ps.payment_id
+         WHERE d.chat_room_id = $1
+         ORDER BY d.created_at DESC
+         LIMIT 1`,
+        [ChatRoomId]
+    );
+
+    let activeDeal: ActiveDealData | undefined = undefined;
+
+    if (dealQuery.rows.length > 0) {
+        const row = dealQuery.rows[0];
+        let slipImageBase64: string | undefined = undefined;
+
+        // หากมีการแนบสลิป/หลักฐาน ให้ดึงข้อมูลรูปภาพจาก Google Drive แปลงเป็น base64
+        if (row.slip_url) {
+            try {
+                const driveResponse = await drive.files.get(
+                    { fileId: row.slip_url, alt: 'media' },
+                    { responseType: 'stream' }
+                );
+                const chunks: any[] = [];
+                for await (const chunk of driveResponse.data) {
+                    chunks.push(chunk);
+                }
+                const buffer = Buffer.concat(chunks);
+                slipImageBase64 = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+            } catch (err) {
+                console.error("Failed to load slip image from Drive:", err);
+            }
+        }
+
+        activeDeal = {
+            Id: row.id,
+            ChatRoomId: row.chat_room_id,
+            BuyerId: row.buyer_id,
+            SellerId: row.seller_id,
+            Title: row.title,
+            Description: row.description,
+            Amount: Number(row.amount),
+            Status: row.status,
+            PaymentId: row.payment_id || undefined,
+            PaymentStatus: row.payment_status || undefined,
+            SlipUrl: row.slip_url || undefined,
+            SlipImageBase64: slipImageBase64
+        };
+    }
 
     const result: MessageDataList = {
         Messages: responseMessages,
         NextCursor: messages.length > 0 ? messages[0].created_at : null,
         HasMore: messages.length === PAGE_SIZE,
         CurrentUserName: currentUserName,
-        OtherUserName: otherUserName
+        OtherUserName: otherUserName,
+        OtherUserId: otherUserId,
+        ActiveDeal: activeDeal
     }
 
     return result;

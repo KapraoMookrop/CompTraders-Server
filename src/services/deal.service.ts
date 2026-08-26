@@ -5,6 +5,7 @@ import { AppError } from "../utils/errors/AppError.js";
 import type { CreateChatRoomRequest } from "../module/CreateChatRoomRequest.js";
 import { ChatRoomMemberStatus, ChatRoomStatus, NotificationType } from "../module/Enum.js";
 import type { UserJWT } from "../module/UserJWT.js";
+import { uploadFileToDrive } from "../utils/drive-upload/GoogleDrive.js";
 
 export async function CreateChatRoom(request: CreateChatRoomRequest, UserJWT: UserJWT): Promise<UUID> {
     const { CreatorId, InviteeId } = request;
@@ -138,6 +139,52 @@ export async function RejectInvite(chatRoomMemberId: string, currentUserId: stri
         throw new AppError("เกิดข้อผิดพลาดขณะปฏิเสธคำเชิญเข้าร่วมแชท" + err.Error, 500);
     }
     finally {
+        client.release();
+    }
+}
+
+export async function UploadPaymentSlip(dealId: string, buyerId: string, userFullName: string, file: Express.Multer.File) {
+    const configFolderId = await pool.query("SELECT value FROM ct.configuration WHERE code = 'GoogleDriveFolderId'");
+    if (configFolderId.rows.length === 0) {
+        throw new AppError("ไม่พบการตั้งค่าโฟลเดอร์บน Google Drive กรุณาติดต่อผู้ดูแลระบบ", 500);
+    }
+    const FOLDER_ID = configFolderId.rows[0].value;
+
+    // อัปโหลดไฟล์สลิปไปยัง Google Drive
+    const uploadResult = await uploadFileToDrive(file, `slip_${dealId}_${Date.now()}.jpg`, FOLDER_ID, userFullName);
+
+    // ดึงจำนวนเงินของดีลเพื่อมาบันทึกในตารางการชำระเงิน
+    const dealResult = await pool.query("SELECT amount FROM ct.deals WHERE id = $1", [dealId]);
+    if (dealResult.rows.length === 0) {
+        throw new AppError("ไม่พบดีลนี้ในระบบ", 404);
+    }
+    const amount = dealResult.rows[0].amount;
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        // สร้างรายการการชำระเงิน (Payments) ด้วยสถานะ PENDING
+        const paymentInsert = await client.query(
+            `INSERT INTO ct.payments (deal_id, payer_id, amount, status) 
+             VALUES ($1, $2, $3, 'PENDING') RETURNING id`,
+            [dealId, buyerId, amount]
+        );
+        const paymentId = paymentInsert.rows[0].id;
+
+        // บันทึกที่อยู่รูปภาพสลิปที่ได้จากไดร์ฟลงในตาราง Payment Slips
+        await client.query(
+            `INSERT INTO ct.payment_slips (payment_id, slip_url) 
+             VALUES ($1, $2)`,
+            [paymentId, uploadResult.id]
+        );
+
+        await client.query("COMMIT");
+        return { success: true, paymentId };
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw new AppError(`เกิดข้อผิดพลาดในการบันทึกหลักฐานการโอนเงิน: ${error}`, 500);
+    } finally {
         client.release();
     }
 }

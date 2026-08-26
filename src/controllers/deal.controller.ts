@@ -30,10 +30,27 @@ export async function AcceptInvite(req: Request, res: Response, next: NextFuncti
   }
 }
 
+import { AppError } from "../utils/errors/AppError.js";
+
 export async function RejectInvite(req: Request, res: Response, next: NextFunction) {
   try {
     const userJWT = (req as any).user as UserJWT;
     const result = await dealService.RejectInvite(req.body.chatRoomMemberId, userJWT.userId);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function UploadPaymentSlip(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userJWT = (req as any).user as UserJWT;
+    const { dealId } = req.body;
+    const file = req.file;
+    if (!file) {
+      throw new AppError("ไม่พบไฟล์หลักฐานการโอนเงิน", 400);
+    }
+    const result = await dealService.UploadPaymentSlip(dealId, userJWT.userId, userJWT.fullName, file);
     res.json(result);
   } catch (error) {
     next(error);
