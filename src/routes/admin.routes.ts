@@ -13,5 +13,6 @@ router.post('/Seller/RejectSellerAsync', authenticateToken, requireAdmin, adminC
 router.post('/Deals/FindAsync', authenticateToken, requireAdmin, adminDealController.FindAsync);
 router.get('/Deals/GetDealByIdAsync', authenticateToken, requireAdmin, adminDealController.GetDealByIdAsync);
 router.post('/Deals/ConfirmPayment', authenticateToken, requireAdmin, adminDealController.ConfirmPayment);
+router.post('/Deals/ReleaseEscrow', authenticateToken, requireAdmin, adminDealController.ReleaseEscrow);
 
 export default router;

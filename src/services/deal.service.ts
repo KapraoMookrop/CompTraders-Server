@@ -360,3 +360,104 @@ export async function ShipDeal(dealId: string, sellerId: string, userFullName: s
         client.release();
     }
 }
+
+export async function ConfirmDelivery(dealId: string, buyerId: string, userFullName: string) {
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        // ดึงข้อมูลดีลและตรวจสอบความถูกต้อง
+        const dealResult = await client.query(
+            `SELECT chat_room_id, buyer_id, status FROM ct.deals WHERE id = $1`,
+            [dealId]
+        );
+        if (dealResult.rowCount === 0) {
+            throw new AppError("ไม่พบดีลนี้ในระบบ", 404);
+        }
+        const deal = dealResult.rows[0];
+        if (deal.buyer_id !== buyerId) {
+            throw new AppError("คุณไม่มีสิทธิ์ในการยืนยันดีลนี้", 403);
+        }
+        if (deal.status !== DealStatus.SHIPPING) {
+            throw new AppError("สถานะดีลปัจจุบันไม่รองรับการยืนยันการรับสินค้า", 400);
+        }
+
+        // 1. อัปเดตสถานะดีลใน ct.deals เป็น DELIVERED
+        await client.query(
+            `UPDATE ct.deals
+             SET status = $2
+             WHERE id = $1`,
+            [dealId, DealStatus.DELIVERED]
+        );
+
+        // 2. อัปเดตสถานะการส่งพัสดุใน ct.shipments เป็น DELIVERED และตั้งค่า delivered_at
+        await client.query(
+            `UPDATE ct.shipments
+             SET status = $2, delivered_at = NOW()
+             WHERE deal_id = $1`,
+            [dealId, ShipmentStatus.DELIVERED]
+        );
+
+        // ดึงข้อมูล shipment_id
+        const shipmentResult = await client.query(
+            `SELECT id FROM ct.shipments WHERE deal_id = $1`,
+            [dealId]
+        );
+        if ((shipmentResult.rowCount ?? 0) > 0) {
+            const shipmentId = shipmentResult.rows[0].id;
+            // 3. บันทึกประวัติการจัดส่งใน ct.shipment_tracking_events
+            await client.query(
+                `INSERT INTO ct.shipment_tracking_events (shipment_id, status, location, description, event_time)
+                 VALUES ($1, $2, 'ปลายทาง', 'ผู้ซื้อยืนยันได้รับสินค้าเรียบร้อยแล้วและไม่มีข้อโต้แย้ง', NOW())`,
+                [shipmentId, ShipmentStatus.DELIVERED]
+            );
+        }
+
+        // 4. บันทึกข้อความแจ้งเตือนความร่วมมือของระบบในห้องแชท
+        const systemMessageContent = `[ระบบ] ผู้ซื้อได้รับสินค้าและกดยืนยันเรียบร้อยแล้ว รอผู้ดูแลระบบดำเนินการโอนเงินให้ผู้ขาย`;
+        const messageInsert = await client.query(
+            `INSERT INTO ct.messages (chat_room_id, sender_id, content_type, content)
+             VALUES ($1, $2, 'TEXT', $3) RETURNING *`,
+            [deal.chat_room_id, buyerId, systemMessageContent]
+        );
+        const newMessage = messageInsert.rows[0];
+
+        await client.query("COMMIT");
+
+        // 5. ดึงสมาชิกทั้งหมดในห้องแชทเพื่อกระจายข้อความ Socket ให้หน้าจออัปเดตแบบเรียลไทม์
+        const members = await pool.query(
+            `SELECT user_id FROM ct.chat_room_members WHERE chat_room_id = $1 AND user_id != $2`,
+            [deal.chat_room_id, buyerId]
+        );
+
+        try {
+            await Promise.all(
+                members.rows.map((m) =>
+                    axios.post(process.env.SOCKET_URL + "/emit", {
+                        type: "new-message",
+                        chatRoomId: deal.chat_room_id,
+                        userId: m.user_id,
+                        message: {
+                            Id: newMessage.id,
+                            ChatRoomId: newMessage.chat_room_id,
+                            SenderId: newMessage.sender_id,
+                            SenderName: userFullName,
+                            ContentType: newMessage.content_type,
+                            Content: newMessage.content,
+                            CreatedAt: newMessage.created_at
+                        }
+                    })
+                )
+            );
+        } catch (err) {
+            console.error("Failed to emit confirm delivery socket notification:", err);
+        }
+
+        return { success: true };
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw new AppError(`เกิดข้อผิดพลาดในการยืนยันการรับสินค้า: ${error}`, 500);
+    } finally {
+        client.release();
+    }
+}

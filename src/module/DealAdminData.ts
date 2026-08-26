@@ -14,4 +14,8 @@ export interface DealAdminData {
     PaymentStatus?: string | undefined;
     SlipUrl?: string | undefined;
     SlipImageBase64?: string | undefined;
+    Carrier?: string | undefined;
+    TrackingNumber?: string | undefined;
+    PackageImageUrl?: string | undefined;
+    PackageImageBase64?: string | undefined;
 }

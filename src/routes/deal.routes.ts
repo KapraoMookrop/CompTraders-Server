@@ -18,5 +18,6 @@ router.post("/AcceptInvite", authenticateToken, dealController.AcceptInvite);
 router.post("/RejectInvite", authenticateToken, dealController.RejectInvite);
 router.post("/UploadPaymentSlip", authenticateToken, upload.single('SlipImage'), dealController.UploadPaymentSlip);
 router.post("/ShipDeal", authenticateToken, upload.single('PackageImage'), dealController.ShipDeal);
+router.post("/ConfirmDelivery", authenticateToken, dealController.ConfirmDelivery);
 
 export default router;

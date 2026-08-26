@@ -71,3 +71,14 @@ export async function ShipDeal(req: Request, res: Response, next: NextFunction) 
     next(error);
   }
 }
+
+export async function ConfirmDelivery(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userJWT = (req as any).user as UserJWT;
+    const { dealId } = req.body;
+    const result = await dealService.ConfirmDelivery(dealId, userJWT.userId, userJWT.fullName);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}

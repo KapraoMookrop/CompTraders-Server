@@ -29,3 +29,13 @@ export async function ConfirmPayment(req: Request, res: Response, next: NextFunc
     next(error);
   }
 }
+
+export async function ReleaseEscrow(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { dealId } = req.body;
+    await adminDealService.ReleaseEscrow(dealId);
+    res.json({ message: "ดำเนินการโอนเงินให้ผู้ขายสำเร็จ ดีลถูกปิดเสร็จสิ้นเรียบร้อยแล้ว" });
+  } catch (error) {
+    next(error);
+  }
+}

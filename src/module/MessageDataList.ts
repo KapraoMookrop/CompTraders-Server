@@ -18,6 +18,7 @@ export interface ActiveDealData {
     ShipmentStatus?: string | undefined;
     PackageImageUrl?: string | undefined;
     PackageImageBase64?: string | undefined;
+    CreatedAt?: Date | string | undefined;
 }
 
 export interface MessageDataList {

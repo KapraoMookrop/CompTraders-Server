@@ -152,6 +152,7 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
             d.description,
             d.amount,
             d.status,
+            d.created_at,
             p.id as payment_id,
             p.status as payment_status,
             ps.slip_url,
@@ -230,7 +231,8 @@ export async function GetMessages(request: MessageRequestData, userId: UUID): Pr
             TrackingNumber: row.tracking_number || undefined,
             ShipmentStatus: row.shipment_status || undefined,
             PackageImageUrl: row.package_image_url || undefined,
-            PackageImageBase64: packageImageBase64
+            PackageImageBase64: packageImageBase64,
+            CreatedAt: row.created_at
         };
     }
 
